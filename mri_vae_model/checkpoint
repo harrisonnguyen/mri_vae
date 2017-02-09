@@ -1,0 +1,5 @@
+model_checkpoint_path: "/home/harrison/Documents/mri_vae/mri_vae_model/my-model.ckpt-3"
+all_model_checkpoint_paths: "/home/harrison/Documents/mri_vae/mri_vae_model/my-model.ckpt-0"
+all_model_checkpoint_paths: "/home/harrison/Documents/mri_vae/mri_vae_model/my-model.ckpt-1"
+all_model_checkpoint_paths: "/home/harrison/Documents/mri_vae/mri_vae_model/my-model.ckpt-2"
+all_model_checkpoint_paths: "/home/harrison/Documents/mri_vae/mri_vae_model/my-model.ckpt-3"
