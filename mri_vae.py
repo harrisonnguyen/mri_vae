@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import tensorflow as tf
 import edward as ed
 import os
@@ -67,7 +69,7 @@ def _get3d_deconv_output_size(input_height, input_width,input_depth, filter_heig
 
 
 ## creates a deconvolution layer with specific activation function
-def _3D_deconv_layer(name, kernel_shape, biases_shape,prev_layer, activation_fn = tf.nn.relu,
+def _3D_deconv_layer(name, kernel_shape, biases_shape,prev_layer, activation_fn = tf.nn.elu,
                   strides = [1, 1, 1,1,1], padding = 'VALID'):
     
     with tf.variable_scope(name) as scope:
@@ -83,7 +85,7 @@ def _3D_deconv_layer(name, kernel_shape, biases_shape,prev_layer, activation_fn 
     return conv
 
 ##creates a convolution layer with specific activation function
-def _3D_conv_layer(name, kernel_shape, biases_shape,prev_layer, activation_fn = tf.nn.relu,
+def _3D_conv_layer(name, kernel_shape, biases_shape,prev_layer, activation_fn = tf.nn.softplus,
                   strides = [1, 1, 1, 1, 1], padding = 'VALID'):
     with tf.variable_scope(name) as scope:
         kernel = _weight_variable('weights',kernel_shape)
@@ -108,19 +110,18 @@ def generative_network(z):
     prev_layer = reshape_z
     in_filter = latent_dimension
     #deconv layer 1
-    out_filter=20
-    kernel_shape = [3,3,3,out_filter,in_filter]
+    out_filter=10
+    kernel_shape = [17,19,17,out_filter,in_filter]
     biases_shape = [out_filter]
     prev_layer = _3D_deconv_layer('deconv1',kernel_shape,biases_shape,prev_layer)
     in_filter = out_filter
-
     #deconv layer 2
-    out_filter=10
-    kernel_shape = [4,5,4,out_filter,in_filter]
+    out_filter=1
+    kernel_shape = [15,19,15,out_filter,in_filter]
     biases_shape = [out_filter]
-    prev_layer = _3D_deconv_layer('deconv2',kernel_shape,biases_shape,prev_layer)
+    prev_layer = _3D_deconv_layer('deconv2',kernel_shape,biases_shape,prev_layer,activation_fn=tf.nn.sigmoid)
     in_filter = out_filter
-
+    """
     #deconv layer 3
     out_filter=5
     kernel_shape = [5,5,5,out_filter,in_filter]
@@ -128,11 +129,12 @@ def generative_network(z):
     prev_layer = _3D_deconv_layer('deconv3',kernel_shape,biases_shape,prev_layer,strides = [1,2,2,2,1])
     in_filter = out_filter
     #deconv layer 4
-    out_filter=3
+    out_filter=1
     kernel_shape = [3,3,3,out_filter,in_filter]
     biases_shape = [out_filter]
     prev_layer = _3D_deconv_layer('deconv4',kernel_shape,biases_shape,prev_layer,strides = [1,2,2,2,1],padding = 'SAME')
     in_filter = out_filter
+    """
     """
     #deconv layer 5
     out_filter=3
@@ -148,22 +150,16 @@ def generative_network(z):
     prev_layer = _3D_deconv_layer('deconv6',kernel_shape,biases_shape,prev_layer)
     in_filter = out_filter
     """
-     #fully connected layer
-    dim = tensor_shape.as_dimension(prev_layer.shape[1])*tensor_shape.as_dimension(prev_layer.shape[2])*tensor_shape.as_dimension(prev_layer.shape[3])*tensor_shape.as_dimension(prev_layer.shape[4])
-    dim = int(dim)
-    prev_layer_flat = tf.reshape(prev_layer, [batch_size, dim])
-
-    weights = _weight_variable('weights_full_gen', [dim, x_shape[0]*x_shape[1]*x_shape[2]])
-    biases = _bias_variable('biases_full_gen', [x_shape[0]*x_shape[1]*x_shape[2]])
-    fully_connected = tf.nn.sigmoid(tf.matmul(prev_layer_flat, weights) + biases)
     """
     #output_layer
+    mu = tf.reshape(fully_connected[:, :latent_dimension],[batch_size,latent_dimension])
     out_filter = 1
     kernel_shape = [2,4,2,out_filter,in_filter]
     biases_shape = [out_filter]
     output = _3D_deconv_layer('gen_output',kernel_shape,biases_shape,prev_layer,activation_fn=tf.nn.sigmoid)
     """
-    mu = tf.reshape(fully_connected,[batch_size,x_shape[0],x_shape[1],x_shape[2],1])
+    mu = tf.reshape(prev_layer,[batch_size,x_shape[0],x_shape[1],x_shape[2],1])
+    #mu = tf.reshape(fully_connected,[batch_size,x_shape[0],x_shape[1],x_shape[2],1])
     #sigma =  tf.reshape(tf.nn.softplus(output[:,:,:,:,1]),[batch_size,x_shape[0],x_shape[1],x_shape[2],1]) + 1e-10
 
     return mu#,sigma
@@ -184,8 +180,8 @@ skull stripping Kleesiek, J 2016
     in_filter = 1
     #reshaped_x = tf.reshape(x,[batch_size,tf.shape(x)[1],tf.shape(x)[2],tf.shape(x)[3],in_filter])
     #layer 1
-    out_filter = 16
-    kernel_shape = [4,4,4,in_filter,out_filter]
+    out_filter = 24
+    kernel_shape = [3,3,3,in_filter,out_filter]
     biases_shape = [out_filter]
     prev_layer = _3D_conv_layer('conv1',kernel_shape,biases_shape,x)
     in_filter = out_filter
@@ -198,48 +194,47 @@ skull stripping Kleesiek, J 2016
     prev_layer = pool1
     
     #layer 2
-    out_filter = 24
-    kernel_shape = [5,5,5,in_filter,out_filter]
+    out_filter = 28
+    kernel_shape = [3,3,3,in_filter,out_filter]
     biases_shape = [out_filter]
     prev_layer = _3D_conv_layer('conv2',kernel_shape,biases_shape,prev_layer)
     in_filter = out_filter
     
     
     #layer 3
-    out_filter = 28
-    kernel_shape = [4,4,4,in_filter,out_filter]
+    out_filter = 24
+    kernel_shape = [3,3,3,in_filter,out_filter]
     biases_shape = [out_filter]
     prev_layer = _3D_conv_layer('conv3',kernel_shape,biases_shape,prev_layer)
     in_filter = out_filter
     
     #layer 4
-    out_filter = 5
-    kernel_shape = [4,4,4,in_filter,out_filter]
+    out_filter = 34
+    kernel_shape = [3,3,3,in_filter,out_filter]
     biases_shape = [out_filter]
     prev_layer = _3D_conv_layer('conv4',kernel_shape,biases_shape,prev_layer,strides = [1,2,2,2,1])
     in_filter = out_filter
-    """
+
     #layer 5
-    out_filter = 2
-    kernel_shape = [5,5,5,in_filter,out_filter]
+    out_filter = 42
+    kernel_shape = [3,3,3,in_filter,out_filter]
     biases_shape = [out_filter]
-    prev_layer = _3D_conv_layer('conv5',kernel_shape,biases_shape,prev_layer,activation_fn=None)
+    prev_layer = _3D_conv_layer('conv5',kernel_shape,biases_shape,prev_layer,activation_fn=tf.nn.tanh)
     in_filter = out_filter
+    """
     #layer 6
     out_filter = 50
-    kernel_shape = [5,5,5,in_filter,out_filter]
+    kernel_shape = [3,3,3,in_filter,out_filter]
     biases_shape = [out_filter]
     prev_layer = _3D_conv_layer('conv6',kernel_shape,biases_shape,prev_layer)
     in_filter = out_filter
-    
     #layer 7
     out_filter = 50
-    kernel_shape = [5,5,5,in_filter,out_filter]
+    kernel_shape = [3,3,3,in_filter,out_filter]
     biases_shape = [out_filter]
     prev_layer = _3D_conv_layer('conv7',kernel_shape,biases_shape,prev_layer)
     in_filter = out_filter
     """
-    
     #fully connected layer
     dim = tensor_shape.as_dimension(prev_layer.shape[1])*tensor_shape.as_dimension(prev_layer.shape[2])*tensor_shape.as_dimension(prev_layer.shape[3])*tensor_shape.as_dimension(prev_layer.shape[4])
     dim = int(dim)
@@ -250,13 +245,24 @@ skull stripping Kleesiek, J 2016
     fully_connected = tf.matmul(prev_layer_flat, weights) + biases
     
     mu = tf.reshape(fully_connected[:, :latent_dimension],[batch_size,latent_dimension])
-    sigma = tf.reshape(tf.nn.softplus(fully_connected[:,latent_dimension:]),[batch_size,latent_dimension]) + 1e-10
+    logsigma2 = tf.reshape(fully_connected[:,latent_dimension:],[batch_size,latent_dimension]) + 1e-10
     """
     fully_connected = prev_layer
     mu = tf.reshape(fully_connected[:,:,:,:,0],[batch_size,latent_dimesnion])
     signa = tf.reshape(tf.nn.softplus(fully_connected[:,:,:,:,1]),[batch_size,latent_dimension])+1e-10
     """
-    return mu,sigma
+    return mu,logsigma2
+
+def VAE_loss(x_ph,x_mu,z_mu,z_logsigma2,learning_rate = 0.01):
+    reconstruct_loss = -tf.reduce_sum(x_ph*tf.log(x_mu +1e-8) + \
+                                    (1-x_ph)*tf.log(1-x_mu+1e-8),axis = 1)
+    
+    latent_loss = -0.5*tf.reduce_sum(1+z_logsigma2
+                               - tf.square(z_mu)
+                               -tf.exp(z_logsigma2),axis=1)
+    cost = tf.reduce_mean(reconstruct_loss+latent_loss)
+    optimiser = tf.train.AdamOptimizer(learning_rate = learning_rate).minimize(cost)
+    return cost,optimiser
 
 def read_and_decode_single_example(filename):
     # first construct a queue containing a list of filenames.
@@ -293,6 +299,7 @@ x_shape = [31,37,31]
 """
 The model
 """
+"""
 z = Normal(mu = tf.zeros([batch_size,latent_dimension]), sigma = tf.ones([batch_size,latent_dimension]))
 #mu_x,sigma_x = generative_network(z)
 mu_x = generative_network(z)
@@ -309,15 +316,22 @@ data = {x: x_ph}
 inference = ed.KLqp({z: qz},data)
 optimizer = tf.train.AdamOptimizer(0.01, epsilon=1.0)
 inference.initialize(optimizer=optimizer)
-## IMPORt the data
+"""
+x_ph = tf.placeholder(tf.float32,[None, x_shape[0],x_shape[1],x_shape[2],1])
+z_mu,z_logsigma2 = inference_network(x_ph)
+epsilon = tf.random_normal([batch_size,latent_dimension],0,1,dtype=tf.float32)
+z = tf.add(tf.multiply(tf.sqrt(tf.exp(z_logsigma2)),epsilon),z_mu)
+mu_x = generative_network(z)
+cost,optimiser = VAE_loss(x_ph,mu_x,z_mu,z_logsigma2)
 
+## IMPORt the data
 # returns symbolic label and image
-image = read_and_decode_single_example("T1_mri_normalized.tfrecords")
+image = read_and_decode_single_example("T1_mri_full_BL_normalized_train.tfrecords")
 # groups examples into batches randomly
 images_batch = tf.train.shuffle_batch(
     [image], batch_size=batch_size,
     capacity=20,
-    min_after_dequeue=10)
+    min_after_dequeue=batch_size)
 
 ##Lets train the model!
 saver = tf.train.Saver()
@@ -325,23 +339,35 @@ with tf.Session() as session:
     session.run(tf.global_variables_initializer())
     coord = tf.train.Coordinator()
     threads = tf.train.start_queue_runners(sess=session,coord=coord)
-    n_epoch = 5
-    n_iter_per_epoch = int(32/batch_size)
+    n_epoch = 50
+    n_iter_per_epoch =  int(86/batch_size)
     for epoch in range(n_epoch):
         avg_loss = 0.0
         for t in range(n_iter_per_epoch):
             x_train= session.run([images_batch])[0]
             x_train = np.reshape(x_train,(batch_size,x_shape[0],x_shape[1],x_shape[2],1))
-            info_dict = inference.update(feed_dict={x_ph: x_train})
-            avg_loss += info_dict['loss']
-
+            cost_val,_, temp = session.run([cost,optimiser,mu_x],feed_dict={x_ph:x_train})
+            #info_dict = inference.update(feed_dict={x_ph: x_train})
+            #avg_loss += info_dict['loss']
+            avg_loss +=cost_val
+            #print(cost_val)
+            #print(temp)
             # Print a lower bound to the average marginal likelihood for an
             # image.
         avg_loss = avg_loss / n_iter_per_epoch
-        avg_loss = avg_loss / batch_size
+        #avg_loss = avg_loss / batch_size
+        #avg_loss = avg_loss / epoch
         print("log p(x) >= {:0.3f}".format(avg_loss))
 
+
+
         saver.save(session,'/project/RDS-SMS-NEUROIMG-RW/harrison/mri_vae_model/my-model.ckpt',write_meta_graph=True,global_step = epoch)
+    
+    #see if the reconstruction is any good
+    x_train= session.run([images_batch])[0]
+    x_train = np.reshape(x_train,(batch_size,x_shape[0],x_shape[1],x_shape[2],1))
+    reconstruct_x = session.run(mu_x, feed_dict = {x_ph:x_train})
+    np.save('reconstruct_x',reconstruct_x)
 
     coord.request_stop()
     coord.join(threads)
