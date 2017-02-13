@@ -113,7 +113,7 @@ def generative_network(z):
     out_filter=10
     kernel_shape = [17,19,17,out_filter,in_filter]
     biases_shape = [out_filter]
-    prev_layer = _3D_deconv_layer('deconv1',kernel_shape,biases_shape,prev_layer)
+    prev_layer = _3D_deconv_layer('deconv1',kernel_shape,biases_shape,prev_layer,tf.nn.tanh)
     in_filter = out_filter
     #deconv layer 2
     out_filter=1
@@ -245,23 +245,28 @@ skull stripping Kleesiek, J 2016
     fully_connected = tf.matmul(prev_layer_flat, weights) + biases
     
     mu = tf.reshape(fully_connected[:, :latent_dimension],[batch_size,latent_dimension])
-    logsigma2 = tf.reshape(fully_connected[:,latent_dimension:],[batch_size,latent_dimension]) + 1e-10
+    #logsigma2 = tf.reshape(fully_connected[:,latent_dimension:],[batch_size,latent_dimension]) + 1e-10
+    sigma = tf.reshape(tf.nn.softplus(fully_connected[:, :latent_dimension]),[batch_size,latent_dimension])
     """
     fully_connected = prev_layer
     mu = tf.reshape(fully_connected[:,:,:,:,0],[batch_size,latent_dimesnion])
     signa = tf.reshape(tf.nn.softplus(fully_connected[:,:,:,:,1]),[batch_size,latent_dimension])+1e-10
     """
-    return mu,logsigma2
+    return mu,sigma
 
-def VAE_loss(x_ph,x_mu,z_mu,z_logsigma2,learning_rate = 0.01):
+def VAE_loss(x_ph,x_mu,z_mu,z_sigma,global_step,  learning_rate_initial = 0.01,learning_decay = 0.96):
     reconstruct_loss = -tf.reduce_sum(x_ph*tf.log(x_mu +1e-8) + \
                                     (1-x_ph)*tf.log(1-x_mu+1e-8),axis = 1)
     
-    latent_loss = -0.5*tf.reduce_sum(1+z_logsigma2
+    #latent_loss = -0.5*tf.reduce_sum(1+z_logsigma2
+                               #- tf.square(z_mu)
+                               #-tf.exp(z_logsigma2),axis=1)
+    latent_loss = -0.5*tf.reduce_sum(1+tf.log(tf.square(z_sigma)+1e-10)
                                - tf.square(z_mu)
-                               -tf.exp(z_logsigma2),axis=1)
-    cost = tf.reduce_mean(reconstruct_loss+latent_loss)
-    optimiser = tf.train.AdamOptimizer(learning_rate = learning_rate).minimize(cost)
+                               -tf.square(z_sigma),axis=1)
+    cost = tf.reduce_mean(reconstruct_loss + latent_loss)
+    learning_rate = tf.train.exponential_decay(learning_rate_initial,global_step,10,learning_decay)
+    optimiser = tf.train.AdamOptimizer(learning_rate = learning_rate).minimize(cost,global_step = global_step)
     return cost,optimiser
 
 def read_and_decode_single_example(filename):
@@ -317,16 +322,20 @@ inference = ed.KLqp({z: qz},data)
 optimizer = tf.train.AdamOptimizer(0.01, epsilon=1.0)
 inference.initialize(optimizer=optimizer)
 """
+global_step = tf.Variable(0,trainable=False)
 x_ph = tf.placeholder(tf.float32,[None, x_shape[0],x_shape[1],x_shape[2],1])
-z_mu,z_logsigma2 = inference_network(x_ph)
+#z_mu,z_logsigma2 = inference_network(x_ph)
+z_mu,z_sigma = inference_network(x_ph)
 epsilon = tf.random_normal([batch_size,latent_dimension],0,1,dtype=tf.float32)
-z = tf.add(tf.multiply(tf.sqrt(tf.exp(z_logsigma2)),epsilon),z_mu)
+#z = tf.add(tf.multiply(tf.sqrt(tf.exp(z_logsigma2)),epsilon),z_mu)
+z = tf.add(tf.multiply(z_sigma,epsilon),z_mu)
 mu_x = generative_network(z)
-cost,optimiser = VAE_loss(x_ph,mu_x,z_mu,z_logsigma2)
+#cost,optimiser = VAE_loss(x_ph,mu_x,z_mu,z_logsigma2)
+cost,optimiser = VAE_loss(x_ph,mu_x,z_mu,z_sigma,global_step)
 
 ## IMPORt the data
 # returns symbolic label and image
-image = read_and_decode_single_example("T1_mri_full_BL_normalized_train.tfrecords")
+image = read_and_decode_single_example("T1_mri_full_BL_normalizedscale_train.tfrecords")
 # groups examples into batches randomly
 images_batch = tf.train.shuffle_batch(
     [image], batch_size=batch_size,
@@ -346,7 +355,7 @@ with tf.Session() as session:
         for t in range(n_iter_per_epoch):
             x_train= session.run([images_batch])[0]
             x_train = np.reshape(x_train,(batch_size,x_shape[0],x_shape[1],x_shape[2],1))
-            cost_val,_, temp = session.run([cost,optimiser,mu_x],feed_dict={x_ph:x_train})
+            cost_val,_, temp = session.run([cost,optimiser,z],feed_dict={x_ph:x_train})
             #info_dict = inference.update(feed_dict={x_ph: x_train})
             #avg_loss += info_dict['loss']
             avg_loss +=cost_val

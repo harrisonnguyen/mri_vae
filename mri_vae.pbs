@@ -1,0 +1,27 @@
+#! /bin/bash
+#perform the python script that processes the fmri images
+#project name
+#PBS -P RDS-SMS-NEUROIMG-RW
+#name of job
+#PBS -N harrison
+#number of nodes and processes we want to use
+#PBS -l select=1:ncpus=1:mem=4GB:ngpus=1
+
+#maximum time
+#PBS -l walltime=0:10:00
+#assign to queue compute, highmem, gpu
+#PBS -q defaultQ
+#standard error and output to same file
+#PBS -j oe
+#PBS -M harrison.nguyen@sydney.edu.au
+#send email when job aborts, begins and ends
+# -m abe
+
+#load modules
+module load python
+cd $PBS_O_WORKDIR
+module load python/3.5.1 cuda/8.0.44
+source ~/tensorflow/bin/activate
+
+
+python /home/hngu4068/MRI_VAE/mri_vae.py
