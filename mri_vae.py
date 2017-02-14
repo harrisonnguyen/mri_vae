@@ -85,7 +85,7 @@ def _3D_deconv_layer(name, kernel_shape, biases_shape,prev_layer, activation_fn 
     return conv
 
 ##creates a convolution layer with specific activation function
-def _3D_conv_layer(name, kernel_shape, biases_shape,prev_layer, activation_fn = tf.nn.softplus,
+def _3D_conv_layer(name, kernel_shape, biases_shape,prev_layer, activation_fn = tf.nn.elu,
                   strides = [1, 1, 1, 1, 1], padding = 'VALID'):
     with tf.variable_scope(name) as scope:
         kernel = _weight_variable('weights',kernel_shape)
@@ -110,54 +110,56 @@ def generative_network(z):
     prev_layer = reshape_z
     in_filter = latent_dimension
     #deconv layer 1
-    out_filter=10
-    kernel_shape = [17,19,17,out_filter,in_filter]
+    out_filter=42
+    kernel_shape = [4,5,4,out_filter,in_filter]
     biases_shape = [out_filter]
-    prev_layer = _3D_deconv_layer('deconv1',kernel_shape,biases_shape,prev_layer,tf.nn.tanh)
+    prev_layer = _3D_deconv_layer('deconv1',kernel_shape,biases_shape,prev_layer)
     in_filter = out_filter
     #deconv layer 2
-    out_filter=1
-    kernel_shape = [15,19,15,out_filter,in_filter]
+    out_filter=38
+    kernel_shape = [4,4,4,out_filter,in_filter]
     biases_shape = [out_filter]
-    prev_layer = _3D_deconv_layer('deconv2',kernel_shape,biases_shape,prev_layer,activation_fn=tf.nn.sigmoid)
+    prev_layer = _3D_deconv_layer('deconv2',kernel_shape,biases_shape,prev_layer)
     in_filter = out_filter
-    """
+
     #deconv layer 3
-    out_filter=5
-    kernel_shape = [5,5,5,out_filter,in_filter]
-    biases_shape = [out_filter]
-    prev_layer = _3D_deconv_layer('deconv3',kernel_shape,biases_shape,prev_layer,strides = [1,2,2,2,1])
-    in_filter = out_filter
-    #deconv layer 4
-    out_filter=1
+    out_filter= 34
     kernel_shape = [3,3,3,out_filter,in_filter]
     biases_shape = [out_filter]
-    prev_layer = _3D_deconv_layer('deconv4',kernel_shape,biases_shape,prev_layer,strides = [1,2,2,2,1],padding = 'SAME')
+    prev_layer = _3D_deconv_layer('deconv3',kernel_shape,biases_shape,prev_layer,strides = [1,2,2,2,1],padding = 'SAME')
     in_filter = out_filter
-    """
-    """
+
+    
+
+    #deconv layer 4
+    out_filter=28
+    kernel_shape = [2,3,2,out_filter,in_filter]
+    biases_shape = [out_filter]
+    prev_layer = _3D_deconv_layer('deconv4',kernel_shape,biases_shape,prev_layer,strides = [1,2,2,2,1])
+    in_filter = out_filter
+
     #deconv layer 5
-    out_filter=3
-    kernel_shape = [5,7,5,out_filter,in_filter]
+    out_filter=24
+    kernel_shape = [2,3,2,out_filter,in_filter]
     biases_shape = [out_filter]
     prev_layer = _3D_deconv_layer('deconv5',kernel_shape,biases_shape,prev_layer)
     in_filter = out_filter
-   
+ 
     #deconv layer 6
     out_filter = 12
-    kernel_shape  =[10,10,10,out_filter,in_filter]
+    kernel_shape  =[2,2,2,out_filter,in_filter]
     biases_shape = [out_filter]
     prev_layer = _3D_deconv_layer('deconv6',kernel_shape,biases_shape,prev_layer)
     in_filter = out_filter
-    """
-    """
+ 
     #output_layer
-    mu = tf.reshape(fully_connected[:, :latent_dimension],[batch_size,latent_dimension])
+    #mu = tf.reshape(fully_connected[:, :latent_dimension],[batch_size,latent_dimension])
     out_filter = 1
-    kernel_shape = [2,4,2,out_filter,in_filter]
+    kernel_shape = [2,2,2,out_filter,in_filter]
     biases_shape = [out_filter]
-    output = _3D_deconv_layer('gen_output',kernel_shape,biases_shape,prev_layer,activation_fn=tf.nn.sigmoid)
-    """
+    prev_layer = _3D_deconv_layer('gen_output',kernel_shape,biases_shape,prev_layer,activation_fn=tf.nn.sigmoid)
+
+
     mu = tf.reshape(prev_layer,[batch_size,x_shape[0],x_shape[1],x_shape[2],1])
     #mu = tf.reshape(fully_connected,[batch_size,x_shape[0],x_shape[1],x_shape[2],1])
     #sigma =  tf.reshape(tf.nn.softplus(output[:,:,:,:,1]),[batch_size,x_shape[0],x_shape[1],x_shape[2],1]) + 1e-10
@@ -219,7 +221,7 @@ skull stripping Kleesiek, J 2016
     out_filter = 42
     kernel_shape = [3,3,3,in_filter,out_filter]
     biases_shape = [out_filter]
-    prev_layer = _3D_conv_layer('conv5',kernel_shape,biases_shape,prev_layer,activation_fn=tf.nn.tanh)
+    prev_layer = _3D_conv_layer('conv5',kernel_shape,biases_shape,prev_layer)
     in_filter = out_filter
     """
     #layer 6
@@ -253,6 +255,30 @@ skull stripping Kleesiek, J 2016
     signa = tf.reshape(tf.nn.softplus(fully_connected[:,:,:,:,1]),[batch_size,latent_dimension])+1e-10
     """
     return mu,sigma
+
+
+def AutoregressiveNN(z,h, l):
+    
+    prev_layer = tf.concat(1,[z,h])
+    dim = int(tensor_shape.as_dimension(latent.shape[1]))
+    with tf.variable_scope('IAF_1') as scope:
+        weights = _weight_variable('weights', [dim, 500])
+        biases = _weight_variable('biases', [500])
+        prev_layer = tf.nn.tanh(tf.matmul(prev_layer,weights) + biases)
+    
+    with tf.variable_scope('IAF_2') as scope:
+        weights = _weight_variable('weights', [dim, latent_dimension*2])
+        biases = _weight_variable('biases', [latent_dimension*2])
+        prev_layer = tf.matmul(prev_layer,weights) + biases
+    
+    m = tf.reshape(fully_connected[:, :latent_dimension],[batch_size,latent_dimension])
+    sigma = tf.reshape(tf.nn.sigmoid(fully_connected[:, :latent_dimension]),[batch_size,latent_dimension])
+    z = tf.add(tf.multiply(sigma,z),tf.multiply(1-sigma,m))
+    
+    #l is logq(z_t|x)
+    l = l - tf.reduce_sum(tf.log(sigma),1)
+    return z, sigma
+
 
 def VAE_loss(x_ph,x_mu,z_mu,z_sigma,global_step,  learning_rate_initial = 0.01,learning_decay = 0.96):
     reconstruct_loss = -tf.reduce_sum(x_ph*tf.log(x_mu +1e-8) + \
@@ -296,7 +322,7 @@ def read_and_decode_single_example(filename):
  Global variables
 """
 ed.set_seed(42)
-latent_dimension = 100
+latent_dimension = 20
 batch_size = 4
 #x_shape = [91,109,91]
 x_shape = [31,37,31]
@@ -325,10 +351,14 @@ inference.initialize(optimizer=optimizer)
 global_step = tf.Variable(0,trainable=False)
 x_ph = tf.placeholder(tf.float32,[None, x_shape[0],x_shape[1],x_shape[2],1])
 #z_mu,z_logsigma2 = inference_network(x_ph)
-z_mu,z_sigma = inference_network(x_ph)
+z_mu,z_sigma = inference_network(x_ph,latent_dimension = latent_dimension)
 epsilon = tf.random_normal([batch_size,latent_dimension],0,1,dtype=tf.float32)
 #z = tf.add(tf.multiply(tf.sqrt(tf.exp(z_logsigma2)),epsilon),z_mu)
 z = tf.add(tf.multiply(z_sigma,epsilon),z_mu)
+l = -tf.reduce_sum(tf.add(tf.log(z_sigma),0.5*tf.square(epsilon)),1) -latent_dimension * 0.5* np.log(2*np.pi)
+#do the IAF
+z_t,_,l_t =  tf.while_loop(condition,AutoregressiveNN,[z,h,l,])
+ 
 mu_x = generative_network(z)
 #cost,optimiser = VAE_loss(x_ph,mu_x,z_mu,z_logsigma2)
 cost,optimiser = VAE_loss(x_ph,mu_x,z_mu,z_sigma,global_step)
@@ -341,6 +371,14 @@ images_batch = tf.train.shuffle_batch(
     [image], batch_size=batch_size,
     capacity=20,
     min_after_dequeue=batch_size)
+
+image_test = read_and_decode_single_example("T1_mri_full_BL_normalizedscale_test.tfrecords")
+# groups examples into batches randomly
+images_batch_test = tf.train.shuffle_batch(
+    [image_test], batch_size=batch_size,
+    capacity=20,
+    min_after_dequeue=batch_size)
+
 
 ##Lets train the model!
 saver = tf.train.Saver()
@@ -373,9 +411,9 @@ with tf.Session() as session:
         saver.save(session,'/project/RDS-SMS-NEUROIMG-RW/harrison/mri_vae_model/my-model.ckpt',write_meta_graph=True,global_step = epoch)
     
     #see if the reconstruction is any good
-    x_train= session.run([images_batch])[0]
-    x_train = np.reshape(x_train,(batch_size,x_shape[0],x_shape[1],x_shape[2],1))
-    reconstruct_x = session.run(mu_x, feed_dict = {x_ph:x_train})
+    x_test= session.run([images_batch_test])[0]
+    x_test = np.reshape(x_test,(batch_size,x_shape[0],x_shape[1],x_shape[2],1))
+    reconstruct_x = session.run(mu_x, feed_dict = {x_ph:x_test})
     np.save('reconstruct_x',reconstruct_x)
 
     coord.request_stop()
