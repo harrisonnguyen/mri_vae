@@ -17,6 +17,7 @@ N = len(structural_files)
 img_data = np.zeros((N,91,109,91))
 #load data and store it in an array
 data = np.zeros((N,31,37,31))
+
 for i in range(N):
     print "Opening file %d" %i
     file_name = structural_files[i]
@@ -26,17 +27,26 @@ for i in range(N):
     #down sample the image
     data[i,:,:,:] = block_reduce(img_data[i,:,:,:],block_size = (3,3,3),func = np.mean)
 
-print "Normalizing data set"
+print "Scale the data set"
 # we will normalize the data set
 flatten_data = np.zeros((N,31*37*31))
 for i in range(N):
     flatten_data[i,:] = data[i,:,:,:].flatten()
-data = minmax_scale(normalize(flatten_data,axis=0))
+data = minmax_scale(flatten_data,axis=1)
+
+
+print "Crop the data set"
+cropped_data = np.zeros((N,22*27*22))
+for i in range(N):
+    cropped_data[i,:] = np.reshape(data[i,:],(31,37,31))[4:26,5:32,4:26].flatten()
+
+data = cropped_data
+
 
    
 print "writing to tfrecords train"
 np.random.shuffle(data)
-writer = tf.python_io.TFRecordWriter("T1_mri_full_BL_normalizedscale_train.tfrecords")
+writer = tf.python_io.TFRecordWriter("T1_BL_scalecropped2_train.tfrecords")
 #iterate over each example
 for i in range(0,N-6):
     temp_data = data[i,:]
@@ -50,7 +60,7 @@ for i in range(0,N-6):
     writer.write(serialized)
 
 print "writing to tfrecords test"
-writer = tf.python_io.TFRecordWriter("T1_mri_full_BL_normalizedscale_test.tfrecords")
+writer = tf.python_io.TFRecordWriter("T1_BL_scalecropped2_test.tfrecords")
 #iterate over each example
 for i in range(N-6,N):
     temp_data = data[i,:]
@@ -83,7 +93,7 @@ def read_and_decode_single_example(filename):
         features={
             # We know the length of both fields. If not the
             # tf.VarLenFeature could be used
-            'image': tf.FixedLenFeature([31*37*31], tf.float32)
+            'image': tf.FixedLenFeature([22*27*22], tf.float32)
         })
     # now return the converted data
     image = features['image']
@@ -91,7 +101,7 @@ def read_and_decode_single_example(filename):
 
 print "Now reading file"
 # returns symbolic label and image
-image = read_and_decode_single_example("T1_mri_full_BL_normalized_train.tfrecords")
+image = read_and_decode_single_example("T1_BL_scalecropped2_train.tfrecords")
 
 # groups examples into batches randomly
 images_batch = tf.train.shuffle_batch(
